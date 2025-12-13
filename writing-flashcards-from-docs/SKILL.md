@@ -1,6 +1,6 @@
 ---
 name: writing-flashcards-from-docs
-description: Use when turning a documentation link or article into spaced-repetition flashcards - fetches and extracts core ideas, compares against existing cards/notes, updates only incorrect/outdated cards, and creates missing cards with strict citation, slug, and tag rules
+description: Use when turning a documentation link or article into spaced-repetition flashcards - fetches and extracts core ideas, compares against existing cards/notes, right-sizes output by source density and existing coverage, updates only incorrect/outdated cards, and creates missing cards with strict citation, slug, and tag rules
 ---
 
 # Writing Flashcards From Docs
@@ -50,23 +50,30 @@ Rules:
 
 Before you output anything:
 1. Fetch the source link.
-2. Extract 5–15 candidate facts/contrasts.
+2. Extract candidate facts/contrasts (don’t target a fixed number).
 3. Search vault for existing coverage.
 4. For each candidate: **Update** (wrong), **Create** (missing), or **Skip** (already covered).
 5. For each output card: verify format + deep link + slug policy (unique per source link).
 
 ## Workflow
 
-### 1) Fetch and Extract
+### 1) Fetch, Extract, and Right-Size
 1. Fetch the provided documentation/article URL.
 2. Identify:
    - Definitions (what is X?)
    - Contrasts (X vs Y)
-   - Rules/limits (timeouts, quotas, defaults)
-   - “If/then” behaviors (retries, fallbacks)
+   - Rules/limits (quotas, thresholds, defaults, constraints)
+   - “If/then” behaviors (decision rules, exceptions, fallbacks)
    - Lists you must memorize (states, phases, enum values)
 3. Prefer subsections that are stable/permalinkable. If anchor links exist, use them.
 4. If you cannot confidently support a detail from the source, **omit it** (do not “fill in” from memory).
+
+**Right-size how many cards you create.** Do not precommit to a number (e.g., “make 30 cards”). The correct card count depends on:
+- **Information available in the source:** short + shallow sources yield few cards; long + dense references yield more.
+- **Existing coverage quality:** if the vault already covers it accurately, you will mostly **skip** (and may output very few cards).
+- **Requested difficulty (if provided):** difficulty changes *what* you select and how deep you go.
+
+If the user demands a fixed quota, treat it as a preference, not a requirement. Never pad with redundant or low-signal cards.
 
 ### 2) Compare With Existing Knowledge
 Before writing anything new:
@@ -109,7 +116,28 @@ Keep cards:
 - Optionally include:
   - `#<exam-code>` (e.g., `#SAP-C02`)
   - `#<secondary-topic>` (e.g., `#iam`, `#sqs`, `#ec2`, `#k8s`)
-  - `#<difficulty-level>` (`#easy`, `#medium`, `#hard`)
+  - `#<difficulty-level>` (`#easy`, `#medium`, `#hard`) when the user asked for a level
+
+## Difficulty Calibration
+When difficulty is specified, select facts and write questions accordingly.
+
+### Easy (`#easy`)
+Goal: basic terminology + core concepts; enough to not be lost in a conversation.
+- Focus on: definitions, purpose, basic distinctions, common examples.
+- Avoid: edge cases, deep tradeoffs, specialized procedures.
+- Think: conversational foundation (e.g., intro survey course; beginner language level; “home cook” fundamentals).
+
+### Medium (`#medium`)
+Goal: working knowledge; enough to make informed decisions and justify choices.
+- Focus on: tradeoffs, constraints, common failure modes, “when to use X vs Y”, practical rules-of-thumb.
+- Include: a few key defaults/limits that change real decisions.
+- Think: decision-making competence (e.g., intermediate musician choosing technique; marketer selecting strategy; project lead choosing approach).
+
+### Hard (`#hard`)
+Goal: expert-level recall; enough to operate at specialist depth.
+- Focus on: nuanced exceptions, tricky edge cases, rare-but-important constraints, internals only if the source supports them.
+- Include: precise limits, compatibility rules, and “gotchas” that commonly cause real failures.
+- Think: specialist mastery (e.g., litigator-level doctrine nuances; clinician-level differential edge cases; competition-level technique).
 
 ## One Good Example
 ```md
