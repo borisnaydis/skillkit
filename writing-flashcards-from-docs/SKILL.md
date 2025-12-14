@@ -26,7 +26,7 @@ Each flashcard must be exactly:
 ```md
 **<question>** #card <optional tags>
 <answer>
-[^<slug>]: <source link>
+[^<slug>]: [<Title>](<source link>)
 ```
 
 **No extra structure:** don’t add `###`, `Card 1`, `Q:`/`A:` labels, bracketed headers like `[topic]`, horizontal rules, tables-of-contents, or trailing metadata blocks.
@@ -35,8 +35,27 @@ Each flashcard must be exactly:
 
 **No exceptions:** If anything like `<task_metadata>…</task_metadata>`, `session_id`, tool output summaries, or any other non-card text appears, delete it and output only flashcards.
 
+## Format Enforcement (Non-Negotiable)
+
+**1. Source Footnotes Only**
+- The source link MUST be a footnote: `[^slug]: [Title](URL)`
+- **NEVER** put the URL in the answer text, even if the user asks for "easier reading."
+- **NEVER** output JSON, lists of objects, or any structure other than the Markdown format below.
+
+**2. Slug Strategy**
+- The footnote slug (`[^slug]`) must describe the **link target** (the section of the docs), NOT the card content.
+- **Good Slug:** `sqs-message-metadata` (describes the page/section).
+- **Bad Slug:** `message-attributes-limit` (describes the specific fact).
+- **Why:** Multiple cards cite the same section. They must share the exact same footnote slug.
+
+**3. Duplication Policy (Zero Tolerance)**
+- **NEVER** create a duplicate card if the fact exists in the vault, even if the user provided a new source.
+- **Exceptions:** You may append a *new* source footnote to an *existing* card if it provides a better citation or additional context, but do NOT create a new card.
+- **Handling Multi-Source Redundancy:** If the user provides multiple links covering the same fact (e.g., limits), extract the fact ONCE, cite the most authoritative source (e.g., Developer Guide > Best Practices), or list both sources in the footnote if they add unique value.
+
 Rules:
 - `#card` is mandatory.
+
 - Output **only cards** (no headings like `###`, no commentary, no extra metadata).
 - Never use vault links in the **question** (no `[[...]]` in questions).
 - Answer may use Markdown: lists, tables, code blocks.
@@ -45,6 +64,7 @@ Rules:
   - `[[AWS Lambda|Lambda]]` (override display text)
 - When you mention a topic that likely has an existing note (languages, services, core concepts), prefer a wiki link (e.g., `[[Python]]`, `[[Java]]`). If you’re unsure a note exists, leave it unlinked.
 - The footnote must reference the **original source document**, not other flashcards.
+- The footnote link MUST be a Markdown link `[Title](URL)`, NOT a bare URL.
 
 ## Quick Reference
 
@@ -53,7 +73,7 @@ Before you output anything:
 2. Extract candidate facts/contrasts (don’t target a fixed number).
 3. Search vault for existing coverage.
 4. For each candidate: **Update** (wrong), **Create** (missing), or **Skip** (already covered).
-5. For each output card: verify format + deep link + slug policy (unique per source link).
+5. For each output card: verify format + deep link + slug policy (slug must describe the LINK, not the card).
 
 ## Workflow
 
@@ -65,7 +85,7 @@ Before you output anything:
    - Rules/limits (quotas, thresholds, defaults, constraints)
    - “If/then” behaviors (decision rules, exceptions, fallbacks)
    - Lists you must memorize (states, phases, enum values)
-3. Prefer subsections that are stable/permalinkable. If anchor links exist, use them.
+3. **Scan for anchors:** Look for `#` links next to headers. You will need these for deep linking.
 4. If you cannot confidently support a detail from the source, **omit it** (do not “fill in” from memory).
 
 **Right-size how many cards you create.** Do not precommit to a number (e.g., “make 30 cards”). The correct card count depends on:
@@ -91,59 +111,83 @@ For each extracted idea, pick the right action:
 - **Create** if the idea is missing in the vault.
 - **Skip** if the info is already covered by an existing card/note.
 
+## Card Style & Quality (No Fluff)
+- **Capture the gist, not the text.** Do not copy-paste corporate documentation speak.
+- **Be concise.** Remove fluff, intro clauses, and marketing language ("fully managed", "seamlessly integrated", "helps you to...").
+- **Plain English.** Explain it like you are talking to a smart engineer, not reading a brochure.
+- **Bad:** "Amazon SQS temporary queues help you save development time and deployment costs when using common message patterns such as request-response."
+- **Good:** "They act as lightweight, low-cost reply channels for request-response patterns without needing API calls to create."
+
 Keep cards:
 - Atomic (one fact/contrast per card)
 - Specific (avoid vague “tell me about X”)
 - Testable (answer can be checked against source)
 
+**Question Style by Difficulty:**
+
+| Level | Goal | Question Style | Example |
+| :--- | :--- | :--- | :--- |
+| **#beginner** | **Vocabulary & Models** | **Simple Recall** (Definition, Purpose) | "What is the default S3 storage class?" |
+| **#advanced** | **Decisions & Trade-offs** | **Comparison / Synthesis** (Why X over Y?) | "Why choose S3 Standard over S3 Intelligent-Tiering for predictable workloads?" |
+| **#expert** | **Internals & Edge Cases** | **Constraints / Scenarios** (What happens if...?) | "What happens to an SQS batch if one message fails and `ReportBatchItemFailures` is disabled?" |
+
+**Global Rules:**
+- **NO Yes/No Questions (CRITICAL):** Questions starting with "Is", "Does", "Can", "Are" are **FORBIDDEN**.
+  - **BAD:** "Does SQS limit consumption?"
+  - **GOOD:** "How does SQS handle consumption limits?"
+  - **BAD:** "Is FIFO compatible with fair queuing?"
+  - **GOOD:** "What is the compatibility between FIFO and fair queuing?"
+- **NO "Tell me about":** "Tell me about SQS" -> **BAD**.
+- **Rewording Pattern:** If a user asks "Does X do Y?", reframe as "How does X handle Y?" or "What is the behavior of X regarding Y?"
+
 ## Citations, Slugs, and Links
 
 ### Source Link
 - Use the original documentation/article you were given.
-- Prefer a deep link to a subsection/anchor (e.g., `#pod-phase`).
+- **Mandatory:** You MUST use deep links (anchor tags) to the specific subsection whenever available (e.g., `.../sqs-temporary-queues.html#virtual-queues`).
+- Verify anchors exist by checking the source HTML or URL bar behavior.
 - Do not cite *additional* documents unless explicitly allowed; keep cards grounded in the provided source.
-- If you can’t deep link, cite the closest stable section URL.
+- If you absolutely can’t deep link (no ID/name attributes), cite the closest stable section URL.
 
 ### Slug
-- Slug is a short identifier derived from the question/topic: kebab-case.
-- Slug is **unique per source link** (URL).
-- If multiple cards cite the exact same URL, they may reuse the same slug (slug uniqueness is scoped to the source link, not to a card).
+- Slug is a short identifier derived from the **link target** (filename + anchor), NOT the card question.
+- **Slug Rule:** The slug MUST describe the specific section being linked to (e.g., `virtual-queues`, `sqs-limits`, `lambda-runtimes`).
+- **Reuse:** Multiple cards citing the same section MUST use the exact same slug.
 - Put exactly **one** footnote per card.
-- Good: `lambda-runtimes`, `pod-phase`, `iam-managed-vs-inline`.
+- Good: `virtual-queues` (for `...#virtual-queues`), `sqs-dead-letter-queues` (for `...#sqs-dead-letter-queues`).
+- Bad: `sqs-cost` (describes card topic, not link), `temp-queue-benefits` (describes card topic).
 
 ## Tags
 - Always include `#card`.
 - Optionally include:
   - `#<exam-code>` (e.g., `#SAP-C02`)
   - `#<secondary-topic>` (e.g., `#iam`, `#sqs`, `#ec2`, `#k8s`)
-  - `#<difficulty-level>` (`#easy`, `#medium`, `#hard`) when the user asked for a level
+  - `#<difficulty-level>` (`#beginner`, `#advanced`, `#expert`) when the user asked for a level
 
 ## Difficulty Calibration
-When difficulty is specified, select facts and write questions accordingly.
+When difficulty is specified, use the **Question Style by Difficulty** table above to select facts and frame questions.
 
-### Easy (`#easy`)
-Goal: basic terminology + core concepts; enough to not be lost in a conversation.
-- Focus on: definitions, purpose, basic distinctions, common examples.
-- Avoid: edge cases, deep tradeoffs, specialized procedures.
-- Think: conversational foundation (e.g., intro survey course; beginner language level; “home cook” fundamentals).
+### Beginner (`#beginner`)
+- **Focus:** Core definitions, primary purposes, and "what is" questions.
+- **Avoid:** Deep internals, obscure limits, complex failure scenarios.
+- **Mental Model:** "Introductory Survey Course" - build the vocabulary first.
 
-### Medium (`#medium`)
-Goal: working knowledge; enough to make informed decisions and justify choices.
-- Focus on: tradeoffs, constraints, common failure modes, “when to use X vs Y”, practical rules-of-thumb.
-- Include: a few key defaults/limits that change real decisions.
-- Think: decision-making competence (e.g., intermediate musician choosing technique; marketer selecting strategy; project lead choosing approach).
+### Advanced (`#advanced`)
+- **Focus:** Trade-offs, decision-making rules ("when to use X vs Y"), and key operational limits.
+- **Avoid:** Rare edge cases that don't affect architectural decisions.
+- **Mental Model:** "Senior Engineer" - justify your choices.
 
-### Hard (`#hard`)
-Goal: expert-level recall; enough to operate at specialist depth.
-- Focus on: nuanced exceptions, tricky edge cases, rare-but-important constraints, internals only if the source supports them.
-- Include: precise limits, compatibility rules, and “gotchas” that commonly cause real failures.
-- Think: specialist mastery (e.g., litigator-level doctrine nuances; clinician-level differential edge cases; competition-level technique).
+### Expert (`#expert`)
+- **Focus:** Edge cases, race conditions, precise internal behaviors, and specific failure modes ("what happens if X fails while Y is retrying?").
+- **Avoid:** Basic definitions or obvious marketing features.
+- **Mental Model:** "Principal Engineer / Troubleshooter" - why is it breaking?
+
 
 ## One Good Example
 ```md
-**What is the difference between an IAM managed policy and an inline policy?** #card #easy #iam
+**What is the difference between an IAM managed policy and an inline policy?** #card #beginner #iam
 Managed policies are standalone and reusable across identities; inline policies are embedded in exactly one identity (user/group/role) and aren’t reusable.
-[^iam-managed-vs-inline]: https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html
+[^iam-managed-vs-inline]: [Managed policies and inline policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html)
 ```
 
 ## Common Mistakes
@@ -152,20 +196,36 @@ Managed policies are standalone and reusable across identities; inline policies 
 - Using a top-of-page link when a subsection anchor exists.
 - Creating duplicates instead of linking to existing notes with wiki links like `[[AWS Lambda]]`.
 - Multi-fact cards that mix definitions + exceptions + limits.
+- **Using `#easy` instead of `#beginner`.**
+- **Creating slugs based on the question (e.g., `sqs-cost`) instead of the link (e.g., `virtual-queues`).**
+- **Using bare URLs in footnotes instead of Markdown links.**
 
 ## Rationalization Table (Do Not Believe These)
 | Excuse | Reality |
 |--------|---------|
+| “The new source is a 'Best Practices' guide” | A fact is a fact. Cite the most authoritative source on the existing card or skip. |
+| “I’ll just add a second card to be safe” | Duplicates cause revision conflicts. Zero tolerance. |
 | “Boss wants everything refreshed” | Only update when wrong/outdated; accuracy > churn. |
 | “Duplicates are fine” | Duplicates rot; link to `[[Existing Note]]` (or `[[Existing Note|Label]]`) or skip. |
 | “I can’t deep-link, I’ll cite the root” | Try anchors first; cite the closest stable subsection URL. |
 | “I’ll add one more AWS/K8s link to be safe” | Use only the provided source unless explicitly allowed. |
 | “I know this from memory; the doc probably says it” | If the source didn’t back it, omit it. |
+| “The slug describes the card better” | Slugs describe the **source**. Use the filename/anchor name. |
+| “Bare URLs are faster to read” | Markdown links are the standard. Follow the format. |
+| “User asked for links in the answer” | Footnotes are mandatory. User convenience < Standard format. |
+| “Topic slugs help me identify the card” | Slugs identify the SOURCE. Use source-based slugs. |
+| “A Yes/No question is simpler/faster” | It leads to shallow recall. Reword to "What is...?" or "How does...?" |
 
 ## Red Flags — STOP
-- “I’ll rewrite all cards for consistency.”
-- “This seems right from memory; no need to fetch.”
-- “The doc is long; I’ll cite the top.”
-- “Duplicates are acceptable.”
-- “I’ll cite extra docs / API pages to pad accuracy.”
-- “I’ll infer missing details.”
+- "I'll rewrite all cards for consistency."
+- "This seems right from memory; no need to fetch."
+- "The doc is long; I’ll cite the top."
+- "User asked for formal tone so I'll keep the fluff."
+- "User asked for inline links."
+- "Duplicates are acceptable."
+- "I’ll cite extra docs / API pages to pad accuracy."
+- "I’ll infer missing details."
+- "I'll use #easy because it's shorter."
+- "I'll make up a slug based on the question."
+- "It's just a quick yes/no check."
+- "It starts with 'Does', but I can't think of another way." -> **STOP. Use "How does..." or "What is..."**
