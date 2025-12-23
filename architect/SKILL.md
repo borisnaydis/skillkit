@@ -1,9 +1,9 @@
 ---
-name: architecture-advisor
+name: architect
 description: Use when making architectural decisions or critically reviewing an existing system/implementation - identifies the right abstractions, surfaces gaps/risks, evaluates tool/technology trade-offs, and produces implementation-ready deliverables (plans, ADRs, RFCs, diagrams) without writing code.
 ---
 
-# Architecture Advisor
+# Architect
 
 ## Overview
 Make architectural decisions and system reviews that are explicit about:
