@@ -23,7 +23,7 @@ Example skills.json:
   {
     "repo": "https://github.com/borisnaydis/skillkit",
     "ref": "main",
-    "path": "architecture-advisor"
+    "path": "architect"
   }
 ]
 EOF
@@ -160,7 +160,20 @@ while IFS='|' read -r repo ref path; do
 
     git -C "$tmp_checkout" config core.sparseCheckout true
     git -C "$tmp_checkout" sparse-checkout init --cone
-    git -C "$tmp_checkout" sparse-checkout set "$path"
+    
+    # Handle wildcards in sparse-checkout
+    if [[ "$path" == *"*"* ]]; then
+        # For wildcards, checkout the parent directory
+        parent_path="${path%/*}"
+        if [ -z "$parent_path" ] || [ "$parent_path" = "$path" ]; then
+            # No parent (top-level wildcard), checkout everything
+            git -C "$tmp_checkout" sparse-checkout disable
+        else
+            git -C "$tmp_checkout" sparse-checkout set "$parent_path"
+        fi
+    else
+        git -C "$tmp_checkout" sparse-checkout set "$path"
+    fi
 
     echo "  - Fetching $ref (shallow)..."
     # Try both "ref" and "refs/heads/ref" to support branches.
@@ -169,24 +182,53 @@ while IFS='|' read -r repo ref path; do
 
     git -C "$tmp_checkout" -c advice.detachedHead=false checkout -q --force FETCH_HEAD >/dev/null
 
-    # Sync the specific path
-    src="$tmp_checkout/$path"
-    skill_name=$(basename "$path")
-    dest="$PROJECT_SKILLS_DIR/$skill_name"
-
-    if [ -d "$src" ]; then
-        echo "  - Installing to $dest..."
+    # Function to install a single item
+    install_skill() {
+        local src_item="$1"
+        local skill_name
+        skill_name=$(basename "$src_item")
+        local dest="$PROJECT_SKILLS_DIR/$skill_name"
+        
+        echo "    - Installing $skill_name to $dest..."
         rm -rf "$dest"
-        cp -R "$src" "$dest"
+        cp -R "$src_item" "$dest"
         
         # Add warning file
-        echo "# GENERATED DIRECTORY - DO NOT EDIT" > "$dest/.generated_warning"
-        echo "Source: $repo" >> "$dest/.generated_warning"
-        echo "Ref: $ref" >> "$dest/.generated_warning"
-        echo "Path: $path" >> "$dest/.generated_warning"
-        echo "Run update-skills.sh to update (see --help)." >> "$dest/.generated_warning"
+        {
+            echo "# GENERATED DIRECTORY - DO NOT EDIT"
+            echo "Source: $repo"
+            echo "Ref: $ref"
+            echo "Path: $path"
+            echo "Run update-skills.sh to update (see --help)."
+        } > "$dest/.generated_warning"
+    }
+
+    # Sync the specific path
+    src="$tmp_checkout/$path"
+    
+    # Handle wildcard paths
+    if [[ "$path" == *"*"* ]]; then
+        echo "  - Processing wildcard path: $path"
+        shopt -s nullglob
+        found=false
+        for item in "$tmp_checkout"/$path; do
+            if [ -e "$item" ]; then
+                found=true
+                install_skill "$item"
+            fi
+        done
+        shopt -u nullglob
+        
+        if [ "$found" = false ]; then
+            echo "  ! Error: No matches found for wildcard path '$path'."
+        fi
     else
-        echo "  ! Error: Path '$path' not found in repo."
+        # Single path
+        if [ -d "$src" ]; then
+            install_skill "$src"
+        else
+            echo "  ! Error: Path '$path' not found in repo."
+        fi
     fi
 done < <(jq -r '.[] | "\(.repo)|\(.ref)|\(.path)"' "$CONFIG_FILE")
 
